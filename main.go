@@ -12,7 +12,7 @@ func main() {
 	}
 	log.Print(DB)
 
-	result, err := DB.Query("CREATE TABLE User")
+	result, err := DB.Create("user")
 
 	if err != nil {
 		log.Fatal(err)

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -13,6 +14,16 @@ type Result struct {
 	Response interface{}
 	Code     int
 	Message  string
+}
+
+type CollectionFunc interface {
+	formatName(collection string) error
+	Create() error
+}
+
+type Collection struct {
+	DataBase *DB
+	Name     string
 }
 
 type Engine interface {
@@ -47,8 +58,9 @@ func New(dir string, options *Options) (*DB, error) {
 	dir = filepath.Clean(dir)
 
 	db := DB{
-		Dir:  dir,
-		Name: opts.Name,
+		Dir:     dir,
+		Name:    opts.Name,
+		mutexes: make(map[string]*sync.Mutex),
 	}
 
 	return &db, os.MkdirAll(dir, 0755)
@@ -65,14 +77,12 @@ func (D DB) Create(collection string) (Result, error) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	//
-	dir := filepath.Join(D.Dir, collection)
-	dir = filepath.Clean(dir)
-	// create collection directory
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return result, err
+	c := Collection{DataBase: &D, Name: collection}
+	err := c.Create()
+	if err != nil {
+		return Result{}, err
 	}
-
+	result.Message = "Success"
 	return result, nil
 }
 
@@ -106,4 +116,25 @@ func (d *DB) getMutex(collection string) *sync.Mutex {
 	}
 
 	return m
+}
+
+func (c *Collection) formatName() error {
+	if c.Name == "" {
+		return fmt.Errorf("Collection Name should not empty")
+	}
+	c.Name = strings.ToLower(c.Name)
+	return nil
+}
+func (c *Collection) Create() error {
+	err := c.formatName()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(c.DataBase.Dir, c.Name)
+	dir = filepath.Clean(dir)
+	// create collection directory
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	return nil
 }
