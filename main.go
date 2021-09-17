@@ -25,4 +25,8 @@ func main() {
 
 	log.Print(results)
 
+	results, err = DB.Query("SELECT * FROM user")
+
+	log.Println(results)
+
 }
