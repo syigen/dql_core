@@ -12,10 +12,17 @@ func main() {
 	}
 	log.Print(DB)
 
-	result, err := DB.Create("user")
+	_, err = DB.Create("user")
 
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Print(result)
+
+	results, err := DB.Query("INSERT INTO user (name,age) VALUES ('Namal','2') , ('Amal','5') ")
+	if err != nil {
+		return
+	}
+
+	log.Print(results)
+
 }
