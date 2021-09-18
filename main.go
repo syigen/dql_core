@@ -18,14 +18,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	results, err := DB.Query("INSERT INTO user (name,age) VALUES ('Namal','2') , ('Amal','5') ")
+	results, err := DB.Query("INSERT INTO user (name,age,height,weight) VALUES ('Namal',2,158,78.5) , ('Amal',5,168,88.5) ")
 	if err != nil {
 		return
 	}
 
 	log.Print(results)
 
-	results, err = DB.Query("SELECT * FROM user")
+	results, err = DB.Query("SELECT * FROM user WHERE name = 'Test' AND age='1' ")
 
 	log.Println(results)
 

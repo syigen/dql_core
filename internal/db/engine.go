@@ -2,11 +2,11 @@ package db
 
 import (
 	"fmt"
-	"github.com/marianogappa/sqlparser"
-	query "github.com/marianogappa/sqlparser/query"
 	"log"
+	"strconv"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type ResultCode int
@@ -61,29 +61,79 @@ func (D DB) Query(sqlQuery string) ([]Result, error) {
 		return results, err
 	}
 
-	collection := q.TableName
-	queryType := q.Type
-
-	log.Printf("Collection Name : %s\n", collection)
-
-	switch queryType {
-	case query.Insert:
-		{
-			insertResults, err := D.insert(q.TableName, q.Fields, q.Inserts)
-			if err != nil {
-				return results, err
+	switch stmt := q.(type) {
+	case *sqlparser.Insert:
+		tableName := stmt.Table
+		columns := stmt.Columns
+		rows := stmt.Rows.(sqlparser.Values)
+		var rowData []interface{}
+		for _, row := range rows {
+			var rowValue []interface{}
+			for _, datam := range row {
+				e := datam.(sqlparser.Expr)
+				switch v := e.(type) {
+				case *sqlparser.Literal:
+					var val interface{}
+					switch v.Type {
+					case sqlparser.IntVal:
+						val, _ = strconv.ParseInt(v.Val, 10, 10)
+					case sqlparser.FloatVal:
+						val, _ = strconv.ParseFloat(v.Val, 10)
+					case sqlparser.StrVal:
+						val = v.Val
+					}
+					rowValue = append(rowValue, val)
+				}
 			}
-			results = append(results, insertResults...)
+			rowData = append(rowData, rowValue)
 		}
-		break
-	case query.Select:
-		{
 
+		D.insert(tableName, columns)
+	//checkEqual(t, "users", stmt.TableName)
+	case *sqlparser.Select:
+		fromTables := stmt.From
+		for _, ft := range fromTables {
+			switch t := ft.(type) {
+			case *sqlparser.AliasedTableExpr:
+				tableName := t.Expr.(sqlparser.TableName).Name
+				log.Println(tableName)
+			}
 		}
-		break
+	default:
+		log.Fatalf("%+v", "type mismatch")
 	}
+	//tableName := q.(*sqlparser.Select).From[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName).Name.String()
+	//operator := q.(*sqlparser.Select).Where.Expr.(*sqlparser.ComparisonExpr).Operator
+	//
+	//log.Println(action,tableName,operator)
 
-	log.Println("Operation : ", q.Type)
+	//collection := q.TableName
+	//queryType := q.Type
+	//
+	//log.Printf("Collection Name : %s\n", collection)
+	//
+	//switch queryType {
+	//case query.Insert:
+	//	{
+	//		insertResults, err := D.insert(q.TableName, q.Fields, q.Inserts)
+	//		if err != nil {
+	//			return results, err
+	//		}
+	//		results = append(results, insertResults...)
+	//	}
+	//	break
+	//case query.Select:
+	//	{
+	//
+	//		selectQuery, err := D.getResult(q.Fields, q.Conditions)
+	//		log.Println(selectQuery)
+	//		log.Println(err)
+	//
+	//	}
+	//	break
+	//}
+	//
+	//log.Println("Operation : ", q.Type)
 
 	return results, nil
 }
