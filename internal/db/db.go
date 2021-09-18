@@ -61,7 +61,7 @@ func New(dir string, options *Options) (*DB, error) {
 }
 
 // Insert Record into Collection
-func (D DB) insert(name string, columns []string, data [][]string) ([]Result, error) {
+func (D DB) insert(name string, columns []string, data [][]interface{}) ([]Result, error) {
 	var results []Result
 	name, err := formatName(name)
 	if err != nil {

@@ -63,10 +63,15 @@ func (D DB) Query(sqlQuery string) ([]Result, error) {
 
 	switch stmt := q.(type) {
 	case *sqlparser.Insert:
-		tableName := stmt.Table
-		columns := stmt.Columns
+		tableName := stmt.Table.Name.String()
+		var columns []string
+
+		for _, column := range stmt.Columns {
+			columns = append(columns, column.String())
+		}
+
 		rows := stmt.Rows.(sqlparser.Values)
-		var rowData []interface{}
+		var rowData [][]interface{}
 		for _, row := range rows {
 			var rowValue []interface{}
 			for _, datam := range row {
@@ -88,7 +93,7 @@ func (D DB) Query(sqlQuery string) ([]Result, error) {
 			rowData = append(rowData, rowValue)
 		}
 
-		D.insert(tableName, columns)
+		D.insert(tableName, columns, rowData)
 	//checkEqual(t, "users", stmt.TableName)
 	case *sqlparser.Select:
 		fromTables := stmt.From
