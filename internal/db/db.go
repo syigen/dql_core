@@ -3,7 +3,6 @@ package db
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/marianogappa/sqlparser/query"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"io/ioutil"
@@ -75,8 +74,8 @@ func New(dir string, options *Options) (*DB, error) {
 }
 
 // Insert Record into Collection
-func (D DB) insert(name string, columns []string, data [][]interface{}) ([]Result, error) {
-	var results []Result
+func (D DB) insert(name string, columns []string, data [][]interface{}) (RawSet, error) {
+	var results RawSet
 	name, err := formatName(name)
 	if err != nil {
 		return results, err
@@ -114,11 +113,7 @@ func (D DB) insert(name string, columns []string, data [][]interface{}) ([]Resul
 		if err != nil {
 			return results, err
 		}
-		results = append(results, Result{
-			Response: record,
-			Code:     SUCCESS,
-			Message:  fmt.Sprintf("Insert Record into %s", record.Collection),
-		})
+		results = append(results, record.Raw)
 	}
 
 	return results, nil

@@ -20,9 +20,9 @@ const (
 )
 
 type Result struct {
-	Response interface{}
-	Code     int
-	Message  string
+	Code    int
+	Message string
+	RawSet  RawSet
 }
 
 type Engine interface {
@@ -60,12 +60,11 @@ func (D DB) Create(collection string) (Result, error) {
 	return result, nil
 }
 
-func (D DB) Query(sqlQuery string) ([]Result, error) {
-	log.Println("-------------------\n", sqlQuery)
-	results := []Result{}
+func (D DB) Query(sqlQuery string) (Result, error) {
+	result := Result{}
 	q, err := sqlparser.Parse(sqlQuery)
 	if err != nil {
-		return results, err
+		return result, err
 	}
 	switch stmt := q.(type) {
 	case *sqlparser.Insert:
@@ -98,9 +97,10 @@ func (D DB) Query(sqlQuery string) ([]Result, error) {
 			}
 			rowData = append(rowData, rowValue)
 		}
-		results, err = D.insert(tableName, columns, rowData)
+		rawSet, err := D.insert(tableName, columns, rowData)
+		result.RawSet = rawSet
 		if err != nil {
-			return nil, err
+			return result, err
 		}
 	case *sqlparser.Select:
 		tables := make(map[string]QueryCollectionDetails)
@@ -116,7 +116,6 @@ func (D DB) Query(sqlQuery string) ([]Result, error) {
 				AsName: asName,
 			}
 		}
-
 		// Gather column names
 		var selectColumns []string
 		for _, sExpr := range stmt.SelectExprs {
@@ -151,24 +150,23 @@ func (D DB) Query(sqlQuery string) ([]Result, error) {
 
 			condition, err := ConvertStringToQueryCondition(operator)
 			if err != nil {
-				return nil, err
+				return result, err
 			}
 
 			if collection != nil {
 				resultSet, err := collection.Query(colName, condition, value)
 				if err != nil {
-					return nil, err
+					return result, err
 				}
-				log.Println(resultSet)
+				result.RawSet = resultSet
+				return result, nil
 			}
-			break
 		}
-
 	default:
 		log.Fatalf("%+v", "type mismatch")
 	}
 
-	return results, nil
+	return result, nil
 }
 
 // getOrCreateMutex creates a new collection specific mutex any time a collection
