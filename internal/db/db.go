@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/marianogappa/sqlparser/query"
 	gonanoid "github.com/matoous/go-nanoid/v2"
@@ -18,7 +19,8 @@ type CollectionID string
 type RecordID string
 
 type Options struct {
-	Name string
+	Name     string
+	ReCreate bool
 }
 type DB struct {
 	Id          DataBaseID
@@ -38,7 +40,8 @@ type DbOps interface {
 func New(dir string, options *Options) (*DB, error) {
 	//Default Options
 	opts := Options{
-		Name: "dql",
+		Name:     "dql",
+		ReCreate: false,
 	}
 
 	if options != nil {
@@ -48,6 +51,17 @@ func New(dir string, options *Options) (*DB, error) {
 	// Prepare Dir
 	dir = filepath.Join(dir, opts.Name)
 	dir = filepath.Clean(dir)
+
+	// Re Create DB
+	if opts.ReCreate {
+		_, err := os.Stat(dir)
+		if !(err != nil && errors.Is(err, os.ErrNotExist)) {
+			err = os.RemoveAll(dir)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	db := DB{
 		Dir:         dir,
@@ -78,18 +92,19 @@ func (D DB) insert(name string, columns []string, data [][]interface{}) ([]Resul
 
 		// Prepare Record
 		record := Record{
-			Id:        RecordID(id),
-			CreatedAT: time.Now().UnixNano(),
-			Data:      make(map[string]interface{}),
+			Id:         RecordID(id),
+			CreatedAT:  time.Now().UnixNano(),
+			Collection: collection.Name,
+			DB:         D.Name,
+			Raw:        make(map[string]interface{}),
 		}
 
-		record.Data["id"] = record.Id
-		record.Data["collection"] = collection
-		record.Data["created_at"] = record.CreatedAT
+		record.Raw["id"] = record.Id
+		record.Raw["created_at"] = record.CreatedAT
 
 		for colIndex, value := range dataRow {
 			colName := columns[colIndex]
-			record.Data[colName] = value
+			record.Raw[colName] = value
 		}
 
 		// Create Data File

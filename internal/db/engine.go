@@ -3,7 +3,9 @@ package db
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -27,6 +29,10 @@ type Engine interface {
 	Create(name string) ([]Result, error)
 	Query(sqlQuery string) ([]Result, error)
 	getMutex(collection string) *sync.Mutex
+}
+type QueryCollectionDetails struct {
+	Name   string
+	AsName string
 }
 
 func (D DB) Create(collection string) (Result, error) {
@@ -55,19 +61,19 @@ func (D DB) Create(collection string) (Result, error) {
 }
 
 func (D DB) Query(sqlQuery string) ([]Result, error) {
+	log.Println("-------------------\n", sqlQuery)
 	results := []Result{}
 	q, err := sqlparser.Parse(sqlQuery)
 	if err != nil {
 		return results, err
 	}
-
 	switch stmt := q.(type) {
 	case *sqlparser.Insert:
 		tableName := stmt.Table.Name.String()
 		var columns []string
 
 		for _, column := range stmt.Columns {
-			columns = append(columns, column.String())
+			columns = append(columns, column.Lowered())
 		}
 
 		rows := stmt.Rows.(sqlparser.Values)
@@ -81,9 +87,9 @@ func (D DB) Query(sqlQuery string) ([]Result, error) {
 					var val interface{}
 					switch v.Type {
 					case sqlparser.IntVal:
-						val, _ = strconv.ParseInt(v.Val, 10, 10)
+						val, _ = strconv.ParseInt(v.Val, 10, 32)
 					case sqlparser.FloatVal:
-						val, _ = strconv.ParseFloat(v.Val, 10)
+						val, _ = strconv.ParseFloat(v.Val, 32)
 					case sqlparser.StrVal:
 						val = v.Val
 					}
@@ -92,53 +98,75 @@ func (D DB) Query(sqlQuery string) ([]Result, error) {
 			}
 			rowData = append(rowData, rowValue)
 		}
-
-		D.insert(tableName, columns, rowData)
-	//checkEqual(t, "users", stmt.TableName)
+		results, err = D.insert(tableName, columns, rowData)
+		if err != nil {
+			return nil, err
+		}
 	case *sqlparser.Select:
-		fromTables := stmt.From
-		for _, ft := range fromTables {
-			switch t := ft.(type) {
-			case *sqlparser.AliasedTableExpr:
-				tableName := t.Expr.(sqlparser.TableName).Name
-				log.Println(tableName)
+		tables := make(map[string]QueryCollectionDetails)
+		for _, from := range stmt.From {
+			tb := from.(*sqlparser.AliasedTableExpr)
+			colletionName := tb.Expr.(sqlparser.TableName).Name.CompliantName()
+			asName := strings.ToLower(colletionName)
+			if !tb.As.IsEmpty() {
+				asName = tb.As.CompliantName()
+			}
+			tables[asName] = QueryCollectionDetails{
+				Name:   colletionName,
+				AsName: asName,
 			}
 		}
+
+		// Gather column names
+		var selectColumns []string
+		for _, sExpr := range stmt.SelectExprs {
+			switch t := sExpr.(type) {
+			case *sqlparser.AliasedExpr:
+				colName := strings.ToLower(t.Expr.(*sqlparser.ColName).CompliantName())
+				selectColumns = append(selectColumns, colName)
+			}
+		}
+
+		switch op := stmt.Where.Expr.(type) {
+		case *sqlparser.ComparisonExpr:
+			colNameWithTableName := strings.ToLower(op.Left.(*sqlparser.ColName).CompliantName())
+			colName := strings.ToLower(op.Left.(*sqlparser.ColName).Name.Lowered())
+			value := op.Right.(*sqlparser.Literal).Val
+			operator := op.Operator.ToString()
+
+			// Select Collection
+			var collection *Collection
+			if len(tables) == 1 {
+				qTable := tables[reflect.ValueOf(tables).MapKeys()[0].String()]
+				collection = D.collections[qTable.Name]
+			} else {
+				for _, tableName := range reflect.ValueOf(tables).MapKeys() {
+					if strings.HasPrefix(colNameWithTableName, tableName.String()+"_") {
+						qTable := tables[tableName.String()]
+						collection = D.collections[qTable.Name]
+						break
+					}
+				}
+			}
+
+			condition, err := ConvertStringToQueryCondition(operator)
+			if err != nil {
+				return nil, err
+			}
+
+			if collection != nil {
+				resultSet, err := collection.Query(colName, condition, value)
+				if err != nil {
+					return nil, err
+				}
+				log.Println(resultSet)
+			}
+			break
+		}
+
 	default:
 		log.Fatalf("%+v", "type mismatch")
 	}
-	//tableName := q.(*sqlparser.Select).From[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName).Name.String()
-	//operator := q.(*sqlparser.Select).Where.Expr.(*sqlparser.ComparisonExpr).Operator
-	//
-	//log.Println(action,tableName,operator)
-
-	//collection := q.TableName
-	//queryType := q.Type
-	//
-	//log.Printf("Collection Name : %s\n", collection)
-	//
-	//switch queryType {
-	//case query.Insert:
-	//	{
-	//		insertResults, err := D.insert(q.TableName, q.Fields, q.Inserts)
-	//		if err != nil {
-	//			return results, err
-	//		}
-	//		results = append(results, insertResults...)
-	//	}
-	//	break
-	//case query.Select:
-	//	{
-	//
-	//		selectQuery, err := D.getResult(q.Fields, q.Conditions)
-	//		log.Println(selectQuery)
-	//		log.Println(err)
-	//
-	//	}
-	//	break
-	//}
-	//
-	//log.Println("Operation : ", q.Type)
 
 	return results, nil
 }
