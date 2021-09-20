@@ -2,7 +2,6 @@ package main
 
 import (
 	"dcore/internal/db"
-	"fmt"
 	"log"
 	"time"
 )
@@ -23,63 +22,47 @@ func main() {
 	var result db.Result
 
 	t1 := time.Now()
-
-	for range [1000]int{} {
+	for range [10000]int{} {
 		result, err = DB.Query("INSERT INTO user (name,age,height,weight) VALUES ('Aruna',15,158,78.5)")
-		result, err = DB.Query("INSERT INTO user (name,age,height,weight) VALUES ('Amila',16,148,68.5)")
-		result, err = DB.Query("INSERT INTO user (name,age,height,weight) VALUES ('Yasruka',25,168,58.5)")
-		result, err = DB.Query("INSERT INTO user (name,age,height,weight) VALUES ('Maduranga',45,172,72.5)")
-		result, err = DB.Query("INSERT INTO user (name,age,height,weight) VALUES ('Aruna',55,160,72.5)")
 		if err != nil {
 			return
 		}
 	}
 	t2 := time.Now()
 	diff := t2.Sub(t1)
-	fmt.Println("Insert Duration ", diff)
-	fmt.Println("Insert Duration Per Second\n", 10000*5/diff.Seconds())
+	log.Println("Insert Duration ", diff)
+	log.Printf("Insert Duration Per Second %f \n", 10000/diff.Seconds())
 
 	//log.Print(results)
 	t1 = time.Now()
 	result, err = DB.Query("SELECT u.name,u.age FROM user as u WHERE u.Name = 'Namal' ")
-	log.Println(len(result.RawSet))
-	t2 = time.Now()
-	diff = t2.Sub(t1)
-	fmt.Println("Duration ", diff)
-	fmt.Println("Duration Per Second\n", 1000000*5/diff.Seconds())
+	logTime(result, err, t1)
 
 	t1 = time.Now()
 	result, err = DB.Query("SELECT u.name,u.age FROM user as u WHERE u.AGE > 2 ")
-	log.Println(len(result.RawSet))
-
-	t2 = time.Now()
-	diff = t2.Sub(t1)
-	fmt.Println("Duration ", diff)
-	fmt.Println("Duration Per Second\n", 1000000*5/diff.Seconds())
+	logTime(result, err, t1)
 
 	t1 = time.Now()
 	result, err = DB.Query("SELECT u.name,u.age FROM user as u WHERE u.AGE >= 5 ")
-	log.Println(len(result.RawSet))
-
-	t2 = time.Now()
-	diff = t2.Sub(t1)
-	fmt.Println("Duration ", diff)
-	fmt.Println("Duration Per Second\n", 1000000*5/diff.Seconds())
+	logTime(result, err, t1)
 
 	t1 = time.Now()
 	result, err = DB.Query("SELECT u.name,u.age FROM user as u WHERE u.Height < 120  ")
-	log.Println(len(result.RawSet))
-	t2 = time.Now()
-	diff = t2.Sub(t1)
-	fmt.Println("Duration ", diff)
-	fmt.Println("Duration Per Second\n", 1000000*5/diff.Seconds())
+	logTime(result, err, t1)
 
 	t1 = time.Now()
 	result, err = DB.Query("SELECT u.name,u.age FROM user as u WHERE u.Height <= 158 ")
-	log.Println(len(result.RawSet))
-	t2 = time.Now()
-	diff = t2.Sub(t1)
-	fmt.Println("Duration ", diff)
-	fmt.Println("Duration Per Second", 1000000*5/diff.Seconds())
+	logTime(result, err, t1)
 
+}
+
+func logTime(result db.Result, err error, t1 time.Time) {
+	if err != nil {
+		log.Fatal(err)
+	}
+	t2 := time.Now()
+	diff := t2.Sub(t1)
+	log.Printf("Duration %s", diff.String())
+	log.Printf("Result Length %d", len(result.RawSet))
+	log.Printf("Duration Per Second %f \n", float64(len(result.RawSet))/diff.Seconds())
 }
